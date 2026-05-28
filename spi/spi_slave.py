@@ -66,10 +66,19 @@ class SPISlave:
         self.nor_storage = nor_storage
         self.set_spi_mode(spi_mode)
 
+        # Load SPI bus frequency configuration
+        spi_clock_mhz = self.nor_storage.config.get("spi_clock_mhz", 10.0)
+        self.spi_clock_hz = spi_clock_mhz * 1_000_000.0
+
         self.last_command: dict | None = None
         self.transaction_log: list[dict] = []
 
-        logger.info("SPISlave initialized in %s mode (bus width: %d-bit)", self.spi_mode, self.bus_width)
+        logger.info(
+            "SPISlave initialized in %s mode (bus width: %d-bit, speed: %.1f MHz)",
+            self.spi_mode,
+            self.bus_width,
+            spi_clock_mhz,
+        )
 
     def set_spi_mode(self, mode: str) -> None:
         """
@@ -184,6 +193,12 @@ class SPISlave:
 
             else:
                 raise ValueError(f"Unknown opcode: 0x{opcode:02X}")
+
+            # Simulate SPI bus transmission delay (request packet + response packet)
+            total_bits = (len(packet) + len(response)) * 8
+            effective_clocks = total_bits / self.bus_width
+            bus_delay = effective_clocks / self.spi_clock_hz
+            time.sleep(bus_delay)
 
             elapsed_ms = (time.perf_counter() - start_time) * 1000.0
             t_flash = 0.0

@@ -81,7 +81,7 @@ if new_value != incoming_byte:
 
 ---
 
-### 3.3 SPI Protocol Packets & Bus Modes (`spi/`)
+### 3.3 SPI Protocol Packets & Physical Bus Timing (`spi/`)
 The Master and Slave exchange bytes using standard commands:
 
 | Command | Opcode | Packet Structure | Description |
@@ -91,13 +91,20 @@ The Master and Slave exchange bytes using standard commands:
 | **ERASE** | `0xD8` | `[0xD8][Block ID]` | Erases block (sets to 0xFF) |
 | **READ STATUS** | `0x05` | `[0x05]` | Returns busy flags |
 
-#### Bus Width Simulation:
-The interface bus width affects the number of clock cycles required to transfer the command packet over the bus wires:
-- **Standard SPI**: 1-bit serial bus. Transfer time = $\text{Bytes} \times 8$ clock cycles.
-- **Dual SPI (QSPI)**: 4-bit bus. Transfer time = $\text{Bytes} \times 2$ clock cycles.
-- **Octal SPI**: 8-bit bus. Transfer time = $\text{Bytes} \times 1$ clock cycle.
+#### Physical Bus Timing Simulation:
+Bus timings are calculated dynamically using the configured SPI frequency (`spi_clock_mhz` in `config.json`) and the physical bus width parameters for standard SPI, QSPI, and Octal SPI:
 
-The simulator logs these effective clock cycles in debug mode, demonstrating the hardware throughput improvements of QSPI and Octal SPI over traditional SPI.
+1. **Clocks Per Byte**:
+   - **Standard SPI**: 1-bit bus $\rightarrow$ 8 clock cycles per byte.
+   - **QSPI**: 4-bit bus $\rightarrow$ 2 clock cycles per byte.
+   - **Octal SPI**: 8-bit bus $\rightarrow$ 1 clock cycle per byte.
+
+2. **Transmission Time Formula**:
+   $$\text{Transfer Bits} = (\text{Command Packet Size} + \text{Response Packet Size}) \times 8$$
+   $$\text{Clock Cycles} = \frac{\text{Transfer Bits}}{\text{Bus Width}}$$
+   $$\text{Simulated Bus Delay (seconds)} = \frac{\text{Clock Cycles}}{\text{SPI Clock Frequency (Hz)}}$$
+
+To implement this timing model, the `SPISlave` applies a `time.sleep(bus_delay)` during transaction processing. Consequently, larger read/write requests show noticeable and mathematically accurate transmission latency differences depending on the bus mode selected.
 
 ---
 
@@ -106,7 +113,7 @@ The simulator logs these effective clock cycles in debug mode, demonstrating the
 To visualize and debug performance bottlenecks, the simulator splits the total execution time of every operation into three subtasks using high-precision timers (`time.perf_counter()`):
 
 1. **SPI Bus & Controller Overhead ($t_{\text{SPI}}$)**:
-   The time spent serializing the data packet, decoding the instruction, and parsing addressing headers.
+   The time spent clocking the bits over the bus wires (simulated using the formula in section 3.3) plus actual master-slave packet serialization and protocol decode overhead.
 2. **Flash Operation Latency ($t_{\text{Flash}}$)**:
    The pure physical operational latency of the memory cell arrays (emulated via `time.sleep` based on `config.json`) plus actual cell-write array updates.
 3. **Console Logging & Rendering ($t_{\text{Print}}$)**:
@@ -131,4 +138,4 @@ An interactive dashboard optimized for state preservation.
 - **Tab Layout**:
   - **Read/Write/Erase Panels**: Forms with validation checking.
   - **Memory Viewer**: Provides a clean look at the memory grid with metrics showing erased capacity vs programmed capacity.
-  - **Transaction History**: Displays detailed logs of all actions with timing breakdowns.
+  - **Transaction History**: Displays detailed logs of all actions with timing breakdowns showing subtask allocations.
