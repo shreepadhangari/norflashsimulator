@@ -1,0 +1,13 @@
+{
+    "flash_size_kb": 64,
+    "blocks": 4,
+    "sectors_per_block": 4,
+    "pages_per_sector": 16,
+    "bytes_per_page": 256,
+
+    "spi_mode": "qspi",
+
+    "read_delay_ms": 10,
+    "write_delay_ms": 100,
+    "erase_delay_ms": 500
+}
