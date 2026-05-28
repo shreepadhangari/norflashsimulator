@@ -197,15 +197,20 @@ class SPISlave:
             # Simulate SPI bus transmission delay (request packet + response packet)
             total_bits = (len(packet) + len(response)) * 8
             effective_clocks = total_bits / self.bus_width
-            bus_delay = effective_clocks / self.spi_clock_hz
-            time.sleep(bus_delay)
+            bus_delay_ms = (effective_clocks / self.spi_clock_hz) * 1000.0
 
-            elapsed_ms = (time.perf_counter() - start_time) * 1000.0
             t_flash = 0.0
             t_print = 0.0
             if opcode in (OPCODE_READ, OPCODE_WRITE, OPCODE_BLOCK_ERASE):
                 t_flash = self.nor_storage.last_op_duration_ms
                 t_print = self.nor_storage.last_print_duration_ms
+
+            # Calculate total elapsed time as the exact mathematical sum of components to eliminate Python scheduling/IO jitter.
+            # If the operation didn't touch flash, calculate actual Python execution time + bus delay.
+            if opcode in (OPCODE_READ, OPCODE_WRITE, OPCODE_BLOCK_ERASE):
+                elapsed_ms = t_flash + t_print + bus_delay_ms
+            else:
+                elapsed_ms = (time.perf_counter() - start_time) * 1000.0 + bus_delay_ms
 
             # Record the command for terminal display
             self.last_command = {
@@ -221,6 +226,7 @@ class SPISlave:
                 "elapsed_ms": elapsed_ms,
                 "t_flash": t_flash,
                 "t_print": t_print,
+                "t_spi": bus_delay_ms,
             }
 
             # Terminal: print completion
@@ -229,12 +235,19 @@ class SPISlave:
                 term.print_duration_breakdown(elapsed_ms, t_flash, t_print)
 
         except Exception as e:
-            elapsed_ms = (time.perf_counter() - start_time) * 1000.0
             t_flash = 0.0
             t_print = 0.0
             if opcode in (OPCODE_READ, OPCODE_WRITE, OPCODE_BLOCK_ERASE):
                 t_flash = getattr(self.nor_storage, "last_op_duration_ms", 0.0)
                 t_print = getattr(self.nor_storage, "last_print_duration_ms", 0.0)
+            
+            # Use same timing model for consistency even in failure
+            bus_delay_ms = getattr(self, "bus_delay_ms", 0.0)
+            if opcode in (OPCODE_READ, OPCODE_WRITE, OPCODE_BLOCK_ERASE):
+                elapsed_ms = t_flash + t_print + bus_delay_ms
+            else:
+                elapsed_ms = (time.perf_counter() - start_time) * 1000.0
+                
             self.last_command = {
                 "timestamp": timestamp,
                 "opcode": opcode,
@@ -248,6 +261,7 @@ class SPISlave:
                 "elapsed_ms": elapsed_ms,
                 "t_flash": t_flash,
                 "t_print": t_print,
+                "t_spi": bus_delay_ms,
             }
             logger.error("SPI command error: %s", e)
             raise

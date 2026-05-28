@@ -466,15 +466,14 @@ with tab_read:
             address = int(read_addr_str, 16)
             import time
             tx_count_before = len(slave.transaction_log)
-            start_t = time.perf_counter()
             with st.spinner(f"Reading {read_length} bytes from 0x{address:04X}..."):
                 data = master.read(address, read_length)
-            elapsed_ms = (time.perf_counter() - start_t) * 1000.0
 
             tx_added = slave.transaction_log[tx_count_before:]
             t_flash = sum(tx.get("t_flash", 0.0) for tx in tx_added)
             t_print = sum(tx.get("t_print", 0.0) for tx in tx_added)
-            t_spi = max(0.0, elapsed_ms - t_flash - t_print)
+            t_spi = sum(tx.get("t_spi", 0.0) for tx in tx_added)
+            elapsed_ms = t_flash + t_print + t_spi
 
             add_message("success", f"Read {read_length} bytes from 0x{address:04X} in {elapsed_ms:.1f} ms")
 
@@ -546,15 +545,14 @@ with tab_write:
 
             import time
             tx_count_before = len(slave.transaction_log)
-            start_t = time.perf_counter()
             with st.spinner(f"Programming {len(data_bytes)} bytes at 0x{address:04X}..."):
                 master.write(address, data_bytes)
-            elapsed_ms = (time.perf_counter() - start_t) * 1000.0
 
             tx_added = slave.transaction_log[tx_count_before:]
             t_flash = sum(tx.get("t_flash", 0.0) for tx in tx_added)
             t_print = sum(tx.get("t_print", 0.0) for tx in tx_added)
-            t_spi = max(0.0, elapsed_ms - t_flash - t_print)
+            t_spi = sum(tx.get("t_spi", 0.0) for tx in tx_added)
+            elapsed_ms = t_flash + t_print + t_spi
 
             add_message("success", f"Wrote {len(data_bytes)} bytes to 0x{address:04X} in {elapsed_ms:.1f} ms")
 
@@ -626,15 +624,14 @@ with tab_erase:
         try:
             import time
             tx_count_before = len(slave.transaction_log)
-            start_t = time.perf_counter()
             with st.spinner(f"Erasing block {erase_block}..."):
                 master.erase(erase_block)
-            elapsed_ms = (time.perf_counter() - start_t) * 1000.0
 
             tx_added = slave.transaction_log[tx_count_before:]
             t_flash = sum(tx.get("t_flash", 0.0) for tx in tx_added)
             t_print = sum(tx.get("t_print", 0.0) for tx in tx_added)
-            t_spi = max(0.0, elapsed_ms - t_flash - t_print)
+            t_spi = sum(tx.get("t_spi", 0.0) for tx in tx_added)
+            elapsed_ms = t_flash + t_print + t_spi
 
             add_message("success", f"Erased block {erase_block} in {elapsed_ms:.1f} ms")
 

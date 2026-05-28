@@ -6,7 +6,7 @@
     "bytes_per_page": 256,
 
     "spi_mode": "qspi",
-    "spi_clock_mhz": 10.0,
+    "spi_clock_mhz": 0.1,
 
     "read_delay_ms": 10,
     "write_delay_ms": 100,
