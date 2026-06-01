@@ -17,6 +17,7 @@ A modular Python-based NOR Flash Memory Simulator that models the high-level fun
   - **Erase**: Sector/block dropdown picker with safety warnings.
   - **Memory Viewer**: Full 64KB graphical hex table with block usage statistics.
   - **Transaction Log**: Chronological SPI command history with millisecond timing breakdowns.
+  - **SPI Waveform Viewer**: Interactive signal timing diagrams showing CLK, CS#, MOSI/MISO activity per transaction.
 
 ---
 
@@ -36,7 +37,8 @@ A modular Python-based NOR Flash Memory Simulator that models the high-level fun
 └── utils/
     ├── address.py        # Bidirectional address translation (linear <=> 4D hierarchy)
     ├── hexviewer.py      # Classic hex dump formatting
-    └── terminal.py       # Colorama terminal color definitions & visual formatting
+    ├── terminal.py       # Colorama terminal color definitions & visual formatting
+    └── waveform.py       # SVG waveform generator for SPI signal timing diagrams
 ```
 
 ---
@@ -119,3 +121,22 @@ To prevent Windows thread scheduler tick limits (which have a 15.6 ms resolution
 ## Console Aesthetics
 
 The interactive terminal REPL separates sequential command blocks using clean, ASCII-safe cyan horizontal separators (`=` for command boundaries and `-` for subtask breakdowns). This prevents Windows console clutter and ensures a beautiful execution log using cross-platform `colorama` ANSI color formatting.
+
+---
+
+## SPI Waveform Visualization
+
+The **📡 SPI Waveform** tab in the Streamlit GUI renders inline SVG timing diagrams for any recorded transaction. Each diagram shows:
+
+| Signal | Description |
+|--------|-------------|
+| **CLK** | SPI clock square-wave (pulses only during active transaction) |
+| **CS#** | Chip select — active low during the transaction window |
+| **MOSI** / **DATA→** | Data driven by the master (command packet bytes) |
+| **MISO** / **DATA←** | Data returned by the slave (response bytes) |
+
+- **Standard SPI (1-bit)**: Shows individual bit-level transitions on MOSI and MISO.
+- **QSPI (4-bit)**: Shows a collapsed bus waveform with hex nibble annotations per clock cycle.
+- **Octal SPI (8-bit)**: Shows a collapsed bus waveform with hex byte annotations per clock cycle.
+
+Coloured phase labels above the waveform annotate **OPCODE**, **ADDR**, **DATA**/**LEN**, and **RESP** regions. Long payloads are automatically truncated to keep the diagram readable.

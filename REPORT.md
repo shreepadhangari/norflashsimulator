@@ -125,6 +125,23 @@ Bus timings are calculated dynamically using the configured SPI frequency (`spi_
 
 ---
 
+### 3.4 SPI Waveform Visualization Module (`utils/waveform.py`)
+To provide deep, hardware-level visibility into SPI bus transactions, the simulator includes a custom SVG waveform generator. This module programmatically constructs visual timing diagrams showing chip-select (CS#), clock (CLK), and data line activity.
+
+#### Features & Layout Architecture:
+- **Zero-Dependency Vector Output**: Generates raw, standard SVG strings directly without external graphic libraries. This ensures lightweight execution and seamless Streamlit embedding via HTML.
+- **Adaptive Width & Spacing**:
+  - **Standard SPI (1-bit)**: Visualizes bit-level timing. Renders high/low digital transitions for each bit (8 clocks per byte) on separate `MOSI` and `MISO` lines with individual bit annotations (`0` or `1`).
+  - **QSPI (4-bit)**: Collapses the 4-data-line bus into a single hexagonal-slot lane showing hexadecimal nibble values (`0` to `F`), requiring 2 clocks per byte.
+  - **Octal SPI (8-bit)**: Collapses the 8-data-line bus into hexagonal slots showing full byte values (`00` to `FF`), requiring 1 clock per byte.
+- **Interactive Phase Layering**: Maps high-level transaction phases (such as `OPCODE`, `ADDR`, `LEN`, `DATA`, `BLOCK`, and `RESP`) as color-coded block indicators directly above the clock signal.
+- **Visual Signals**:
+  - **CLK**: Renders active square-wave pulses only during active bus cycles; stays flat at logic-low during idle periods.
+  - **CS#**: Renders active-low select transitions (dropping to low before active CLK and pulling back high after transaction completion).
+- **Auto-Truncation**: Long data transfers are truncated to a maximum display limit (scaled dynamically per bus width) with standard ellipsis (`...`) indicators, keeping diagrams clear and readable.
+
+---
+
 ## 4. Execution Timing & Latency Breakdown Model
 
 To visualize and debug performance bottlenecks, the simulator splits the total execution time of every operation into three subtasks using high-precision timers (`time.perf_counter()`):
@@ -159,3 +176,4 @@ An interactive dashboard optimized for state preservation.
   - **Read/Write/Erase Panels**: Forms with validation checking.
   - **Memory Viewer**: Provides a clean look at the memory grid with metrics showing erased capacity vs programmed capacity.
   - **Transaction History**: Displays detailed logs of all actions with timing breakdowns showing subtask allocations.
+  - **SPI Waveform Viewer**: Provides interactive visualization of SPI signal transitions (CLK, CS#, MOSI/DATA, MISO/DATA) for individual transactions. Helps users inspect bit-by-bit or cycle-by-cycle command and data transfers.

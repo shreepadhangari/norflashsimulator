@@ -430,8 +430,8 @@ st.markdown('<p class="sub-header">64KB NOR Flash with SPI Master-Slave Architec
 
 # ─── Operation Tabs ───────────────────────────────────────────────────
 
-tab_read, tab_write, tab_erase, tab_memory, tab_log = st.tabs([
-    "📖 Read", "✏️ Write", "🗑️ Erase", "🗺️ Memory Viewer", "📜 Transaction Log"
+tab_read, tab_write, tab_erase, tab_memory, tab_log, tab_waveform = st.tabs([
+    "📖 Read", "✏️ Write", "🗑️ Erase", "🗺️ Memory Viewer", "📜 Transaction Log", "📡 SPI Waveform"
 ])
 
 # ─── READ Tab ─────────────────────────────────────────────────────────
@@ -777,3 +777,73 @@ with tab_log:
         if st.button("🧹 Clear Log", key="btn_clear_log"):
             slave.transaction_log.clear()
             st.rerun()
+
+# ─── SPI WAVEFORM Tab ─────────────────────────────────────────────────────
+
+with tab_waveform:
+    st.markdown('<p class="section-header">📡 SPI Waveform Viewer</p>', unsafe_allow_html=True)
+    st.markdown(
+        "Visualize bit-level SPI bus signal activity for recorded transactions. "
+        "Shows **CLK**, **CS#**, **MOSI**, and **MISO** signal traces."
+    )
+
+    wf_transactions = slave.get_transaction_log()
+
+    if not wf_transactions:
+        st.info(
+            "💭 No SPI transactions recorded yet. "
+            "Perform a read, write, or erase operation to generate waveforms."
+        )
+    else:
+        # Build human-readable labels for each transaction
+        wf_labels = []
+        for idx, tx in enumerate(wf_transactions):
+            ts = tx["timestamp"].strftime("%H:%M:%S.%f")[:-3]
+            op = tx.get("opcode_name", "???")
+            addr = f"0x{tx['address']:04X}" if tx.get("address") is not None else "\u2014"
+            mode = tx.get("spi_mode", "SPI")
+            wf_labels.append(f"#{idx + 1}  {ts}  \u2502  {op}  \u2502  {addr}  \u2502  {mode}")
+
+        selected_wf_idx = st.selectbox(
+            "Select Transaction",
+            range(len(wf_labels)),
+            format_func=lambda i: wf_labels[i],
+            index=len(wf_labels) - 1,
+            key="waveform_select",
+        )
+
+        wf_tx = wf_transactions[selected_wf_idx]
+
+        if wf_tx.get("packet"):
+            from utils.waveform import generate_waveform_svg, generate_legend_html
+
+            svg_markup = generate_waveform_svg(wf_tx)
+
+            # Scrollable waveform container
+            st.markdown(
+                f'<div style="overflow-x:auto; padding:16px; background:#0E1117; '
+                f'border:1px solid #2D3139; border-radius:12px; margin:12px 0;">'
+                f'{svg_markup}</div>',
+                unsafe_allow_html=True,
+            )
+
+            # Signal legend
+            st.markdown(generate_legend_html(), unsafe_allow_html=True)
+
+            # Transaction detail metrics
+            st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+            detail_cols = st.columns(5)
+            detail_cols[0].metric("Operation", wf_tx.get("opcode_name", "N/A"))
+            wf_addr = f"0x{wf_tx['address']:04X}" if wf_tx.get("address") is not None else "N/A"
+            detail_cols[1].metric("Address", wf_addr)
+            detail_cols[2].metric(
+                "SPI Mode",
+                f"{wf_tx.get('spi_mode', 'SPI')} ({wf_tx.get('bus_width', 1)}-bit)",
+            )
+            detail_cols[3].metric("Packet", f"{len(wf_tx.get('packet', b''))} B")
+            detail_cols[4].metric("Response", f"{len(wf_tx.get('response', b''))} B")
+        else:
+            st.warning(
+                "\u26a0\ufe0f This transaction was recorded before the waveform feature. "
+                "Perform a new operation to see waveforms."
+            )

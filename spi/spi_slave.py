@@ -227,6 +227,8 @@ class SPISlave:
                 "t_flash": t_flash,
                 "t_print": t_print,
                 "t_spi": bus_delay_ms,
+                "packet": packet,
+                "response": response,
             }
 
             # Terminal: print completion
@@ -262,6 +264,8 @@ class SPISlave:
                 "t_flash": t_flash,
                 "t_print": t_print,
                 "t_spi": bus_delay_ms,
+                "packet": packet,
+                "response": b"",
             }
             logger.error("SPI command error: %s", e)
             raise
