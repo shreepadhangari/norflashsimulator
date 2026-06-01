@@ -91,6 +91,7 @@ Modify `config.json` to alter the simulator's settings:
     "pages_per_sector": 16,
     "bytes_per_page": 256,
     "spi_mode": "qspi",
+    "spi_clock_mhz": 0.1,
     "read_delay_ms": 10,
     "write_delay_ms": 100,
     "erase_delay_ms": 500
@@ -98,3 +99,23 @@ Modify `config.json` to alter the simulator's settings:
 ```
 - Geometry: `4 blocks * 4 sectors * 16 pages * 256 bytes = 65,536 bytes (64 KB)`.
 - Delays can be customized to change simulated latency.
+- `spi_clock_mhz` represents the simulated SPI bus clock frequency (e.g. 0.1 MHz helps visualize bus timings in millisecond scale).
+
+---
+
+## Timing & Delay Modeling
+
+To prevent Windows thread scheduler tick limits (which have a 15.6 ms resolution boundary) from introducing timing jitter and obscuring bus mode performance differences (Standard SPI vs QSPI vs Octal SPI), this simulator implements **deterministic mathematical delay modeling**:
+
+1. **Transaction Components**:
+   - **SPI Bus Overhead ($t_{\text{SPI}}$)**: Mathematically calculated based on total packet bit counts and the SPI clock frequency.
+   - **Flash Memory Latency ($t_{\text{Flash}}$)**: Emulated duration for reading, programming, or erasing (configured in `config.json`).
+   - **Console / Logging Overhead ($t_{\text{Print}}$)**: High-precision measurements of host console output formatting and hex dump rendering.
+2. **Deterministic UI Display**:
+   Streamlit GUI metrics and console logs retrieve these values directly from the transaction log database and sum them ($t_{\text{Total}} = t_{\text{SPI}} + t_{\text{Flash}} + t_{\text{Print}}$), bypassing OS scheduling tick bounds. This guarantees that Standard SPI always takes the longest, QSPI is faster, and Octal SPI is the fastest.
+
+---
+
+## Console Aesthetics
+
+The interactive terminal REPL separates sequential command blocks using clean, ASCII-safe cyan horizontal separators (`=` for command boundaries and `-` for subtask breakdowns). This prevents Windows console clutter and ensures a beautiful execution log using cross-platform `colorama` ANSI color formatting.

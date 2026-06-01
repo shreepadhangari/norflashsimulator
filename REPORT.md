@@ -99,12 +99,29 @@ Bus timings are calculated dynamically using the configured SPI frequency (`spi_
    - **QSPI**: 4-bit bus $\rightarrow$ 2 clock cycles per byte.
    - **Octal SPI**: 8-bit bus $\rightarrow$ 1 clock cycle per byte.
 
-2. **Transmission Time Formula**:
-   $$\text{Transfer Bits} = (\text{Command Packet Size} + \text{Response Packet Size}) \times 8$$
-   $$\text{Clock Cycles} = \frac{\text{Transfer Bits}}{\text{Bus Width}}$$
-   $$\text{Simulated Bus Delay (seconds)} = \frac{\text{Clock Cycles}}{\text{SPI Clock Frequency (Hz)}}$$
+2. **Transmission Delay Formulas**:
+   The transmission delay is calculated using the total number of bits transferred (including command request packets and response packets), the physical bus width, and the configured SPI clock frequency.
+   
+   - **Total Transmitted Bits ($B_{\text{Total}}$)**:
+     $$B_{\text{Total}} = (\text{Request Packet Bytes} + \text{Response Packet Bytes}) \times 8$$
+     
+   - **Effective SPI Clock Cycles ($C_{\text{Effective}}$)**:
+     $$C_{\text{Effective}} = \frac{B_{\text{Total}}}{\text{Bus Width}}$$
+     Where $\text{Bus Width}$ is $1$ for Standard SPI, $4$ for QSPI, and $8$ for Octal SPI.
+     
+   - **Mathematical SPI Bus Delay ($t_{\text{SPI}}$ in milliseconds)**:
+     $$t_{\text{SPI}} = \frac{C_{\text{Effective}}}{f_{\text{SPI}}} \times 1000$$
+     Where $f_{\text{SPI}}$ is the SPI clock frequency in Hz (loaded from `spi_clock_mhz` in `config.json`).
 
-To implement this timing model, the `SPISlave` applies a `time.sleep(bus_delay)` during transaction processing. Consequently, larger read/write requests show noticeable and mathematically accurate transmission latency differences depending on the bus mode selected.
+3. **Mitigation of Windows Timer Tick Jitter**:
+   On Windows operating systems, the standard system thread scheduler has a default timer tick resolution of **15.6 ms**. Standard timing functions (such as `time.sleep()`) are bound by this limit. If the simulator attempted to sleep for microsecond-scale physical bus delays (e.g. 0.8 ms for standard SPI, 0.2 ms for QSPI, or 0.1 ms for Octal SPI), the OS would yield the execution slice, causing the sleep to take at least 15.6 ms.
+   
+   This thread-scheduling jitter would make QSPI or Octal SPI occasionally appear slower than Standard SPI in tests, and would obscure the actual performance scaling of the bus widths.
+   
+   To solve this, the simulator implements **mathematical delay modeling** instead of physical sleeping for bus transmissions:
+   - The bus transmission delay ($t_{\text{SPI}}$) is calculated mathematically using the formulas above.
+   - This delay is directly aggregated with the flash operation duration ($t_{\text{Flash}}$) and logging rendering time ($t_{\text{Print}}$).
+   - In the Streamlit GUI, metric values and transaction logs retrieve these subtask durations directly from the simulated log database in `st.session_state` rather than measuring overall web execution elapsed times. This guarantees jitter-free, monotonic, and physically precise latency scaling (Standard SPI > QSPI > Octal SPI) under all environments.
 
 ---
 
@@ -113,17 +130,20 @@ To implement this timing model, the `SPISlave` applies a `time.sleep(bus_delay)`
 To visualize and debug performance bottlenecks, the simulator splits the total execution time of every operation into three subtasks using high-precision timers (`time.perf_counter()`):
 
 1. **SPI Bus & Controller Overhead ($t_{\text{SPI}}$)**:
-   The time spent clocking the bits over the bus wires (simulated using the formula in section 3.3) plus actual master-slave packet serialization and protocol decode overhead.
+   The simulated time spent clocking the bits over the bus wires (calculated using the formula in section 3.3).
 2. **Flash Operation Latency ($t_{\text{Flash}}$)**:
    The pure physical operational latency of the memory cell arrays (emulated via `time.sleep` based on `config.json`) plus actual cell-write array updates.
 3. **Console Logging & Rendering ($t_{\text{Print}}$)**:
-   The CPU time spent formatting the hex grid layout, color-coding log details, and printing updates to the screen.
+   The actual CPU time spent formatting the hex grid layout, color-coding log details, and printing updates to the terminal screen.
 
-#### Calculation:
-$$t_{\text{Total}} = t_{\text{SPI}} + t_{\text{Flash}} + t_{\text{Print}}$$
-$$t_{\text{SPI}} = \max(0, t_{\text{Total}} - t_{\text{Flash}} - t_{\text{Print}})$$
+#### Calculation & State Propagation:
+To eliminate Python JIT compiler warmth overhead and Streamlit page-rerun rendering thread scheduler jitter:
+- **Storage operations** measure $t_{\text{Flash}}$ and $t_{\text{Print}}$ independently.
+- **The SPI Slave** calculates $t_{\text{SPI}}$ mathematically and computes the overall deterministic transaction duration:
+  $$t_{\text{Total}} = t_{\text{SPI}} + t_{\text{Flash}} + t_{\text{Print}}$$
+- **The Streamlit GUI** reads these logged subtask durations directly from `st.session_state` rather than measuring overall web execution residuals, ensuring exact monotonic latency differences.
 
-These breakdowns are presented dynamically as stats (e.g. `Time: 101.3 ms (SPI: 0.2ms, Flash: 100.4ms, Print: 0.8ms)`) in both command-line trace blocks and interactive Streamlit metric tables.
+These breakdowns are presented dynamically in both command-line trace blocks and interactive Streamlit metric tables.
 
 ---
 
